@@ -1,18 +1,42 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { apiClient } from '../../api/client';
 
 export default function CycleTracker() {
   const [flow, setFlow] = useState('');
   const [pain, setPain] = useState('');
   const [showLogged, setShowLogged] = useState(false);
 
+  const [loading, setLoading] = useState(false);
+
   // Mock calendar days
   const days = Array.from({length: 30}, (_, i) => i + 1);
 
-  const handleLog = () => {
-    setShowLogged(true);
-    setTimeout(() => setShowLogged(false), 3000);
+  const handleLog = async () => {
+    setLoading(true);
+    let dayToLog = 1; // Default to the 1st of the month for the MVP demo if no hard calendar selection exists
+    const mockDate = new Date();
+    mockDate.setDate(dayToLog);
+
+    try {
+      const res = await apiClient.post('/cycle/log', {
+         start_date: mockDate.toISOString(),
+         flow_intensity: flow || 'Medium',
+         symptoms: ['cramps']
+      });
+
+      if (res.data.predicted_next_period) {
+         Alert.alert("Period Logged", `Your next period is predicted around: ${res.data.predicted_next_period.substring(0, 10)}`);
+      }
+
+      setShowLogged(true);
+      setTimeout(() => setShowLogged(false), 3000);
+    } catch (e) {
+      Alert.alert("Error", "Could not log cycle to backend.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -69,8 +93,13 @@ export default function CycleTracker() {
         <TouchableOpacity 
           className="bg-[#FF6B6B] p-4 rounded-xl items-center"
           onPress={handleLog}
+          disabled={loading}
         >
-          <Text className="text-white font-bold text-lg">Save Log</Text>
+          {loading ? (
+             <ActivityIndicator color="white" />
+          ) : (
+             <Text className="text-white font-bold text-lg">Save Log</Text>
+          )}
         </TouchableOpacity>
 
         {showLogged && (

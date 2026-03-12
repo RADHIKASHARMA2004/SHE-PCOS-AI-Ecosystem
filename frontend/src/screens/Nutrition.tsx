@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { apiClient } from '../../api/client';
 
 export default function Nutrition() {
   const [meal, setMeal] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [recentLog, setRecentLog] = useState<null | any>(null);
   
   const suggestions = [
     { title: "Breakfast", meals: "Poha with peanuts, Moong Dal Chilla, Ragi Dosa" },
@@ -36,7 +39,7 @@ export default function Nutrition() {
         </View>
 
         <View className="mb-6">
-          <Text className="text-xl font-bold mb-4">Log a Meal</Text>
+          <Text className="text-xl font-bold mb-4">Log a Meal for AI Analysis</Text>
           <View className="flex-row">
             <TextInput 
               className="flex-1 border border-gray-300 rounded-l-xl p-3 bg-white"
@@ -46,12 +49,33 @@ export default function Nutrition() {
             />
             <TouchableOpacity 
               className="bg-[#FFE66D] px-6 justify-center rounded-r-xl border border-[#FFE66D]"
-              onPress={() => { setMeal(''); }}
+              onPress={async () => { 
+                if(!meal) return;
+                setLoading(true);
+                try {
+                  const res = await apiClient.post('/nutrition/analyze', { description: meal });
+                  setRecentLog(res.data);
+                  setMeal('');
+                } catch(e) {
+                  Alert.alert('Error', 'Failed to analyze meal.');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
             >
-              <Text className="font-bold text-gray-800">Add</Text>
+              {loading ? <ActivityIndicator color="gray" /> : <Text className="font-bold text-gray-800">Analyze</Text>}
             </TouchableOpacity>
           </View>
         </View>
+
+        {recentLog && (
+           <View className="bg-[#4ECDC4] p-4 rounded-xl mb-6 shadow-sm">
+             <Text className="font-bold text-white text-lg">AI Feedback</Text>
+             <Text className="text-white mt-1">Found: {recentLog.matched_items?.join(', ') || 'Unknown'}</Text>
+             <Text className="text-white mt-1 font-bold">PCOS Relevance Score: {recentLog.pcos_relevance_score}/10</Text>
+           </View>
+        )}
 
         <Text className="text-xl font-bold mb-4">PCOS-Friendly Indian Meals</Text>
         {suggestions.map((item, index) => (

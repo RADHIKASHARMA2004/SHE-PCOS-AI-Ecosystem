@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { apiClient } from '../../api/client';
 
 export default function AILab() {
   const [messages, setMessages] = useState([
@@ -8,14 +9,27 @@ export default function AILab() {
   ]);
   const [input, setInput] = useState('');
   const [scanResult, setScanResult] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [scanLoading, setScanLoading] = useState(false);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim()) return;
     
     // Add user message
     const newMsgs = [...messages, { id: Date.now().toString(), text: input, sender: 'user' }];
     setMessages(newMsgs);
     setInput('');
+    setChatLoading(true);
+
+    try {
+      const res = await apiClient.post('/ai/chat', { text: input });
+      setMessages(prev => [...prev, { id: Date.now().toString(), text: res.data.reply, sender: 'ai' }]);
+    } catch (e) {
+      setMessages(prev => [...prev, { id: Date.now().toString(), text: "Coach is offline. Try again later.", sender: 'ai' }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
 
     // Mock RAG Logic based on Indian context
     setTimeout(() => {
@@ -34,11 +48,18 @@ export default function AILab() {
     }, 1000);
   };
 
-  const runAcneScan = () => {
+  const runAcneScan = async () => {
     setScanResult("Scanning face via MediaPipe...");
-    setTimeout(() => {
-      setScanResult("Scan Complete: Mild Acne Detected. Risk Score updated. Suggestion: Apply neem paste or salicylic acid.");
-    }, 2000);
+    setScanLoading(true);
+    try {
+      // In reality, this would pass form-data image file
+      const res = await apiClient.post('/ai/scan-acne', { image_url: "mock_image_string" });
+      setScanResult(`Scan Complete: Acne Severity Score: ${res.data.acne_severity_score}/10`);
+    } catch (e) {
+      setScanResult("Error scanning image.");
+    } finally {
+      setScanLoading(false);
+    }
   };
 
   return (
@@ -55,8 +76,13 @@ export default function AILab() {
           <TouchableOpacity 
             className="bg-[#a55eea] p-3 rounded-lg items-center"
             onPress={runAcneScan}
+            disabled={scanLoading}
           >
-            <Text className="text-white font-bold">📸 Run MediaPipe Scan</Text>
+            {scanLoading ? (
+               <ActivityIndicator color="white" />
+            ) : (
+               <Text className="text-white font-bold">📸 Run MediaPipe Scan</Text>
+            )}
           </TouchableOpacity>
           {scanResult ? <Text className="mt-3 text-purple-700 font-semibold">{scanResult}</Text> : null}
         </View>
@@ -69,6 +95,7 @@ export default function AILab() {
               <Text className={msg.sender === 'ai' ? 'text-gray-800' : 'text-white'}>{msg.text}</Text>
             </View>
           ))}
+          {chatLoading && <ActivityIndicator size="small" color="#a55eea" className="self-start mt-2" />}
         </View>
 
         <View className="flex-row items-center">

@@ -1,19 +1,44 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { apiClient } from '../../api/client';
+import { useAuth } from '../context/AuthContext';
 
 export default function Dashboard({ navigation }: any) {
-  const [healthScore, setHealthScore] = useState(85);
-  const [riskLevel, setRiskLevel] = useState("Low");
+  const { logout } = useAuth();
+  const [healthScore, setHealthScore] = useState(0);
+  const [riskLevel, setRiskLevel] = useState("Loading...");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchRiskScore();
+  }, []);
+
+  const fetchRiskScore = async () => {
+    try {
+      const res = await apiClient.post('/ai/predict-risk', {});
+      
+      if (res.data.error) {
+         setRiskLevel("Model Untrained");
+      } else {
+         setHealthScore(res.data.hormone_health_score);
+         setRiskLevel(res.data.pcos_risk_binary === 1 ? "HIGH RISK" : "LOW RISK");
+      }
+    } catch (e) {
+      setRiskLevel("API Error");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-white">
       <ScrollView className="p-4">
         <View className="flex-row justify-between items-center mb-6">
           <Text className="text-2xl font-bold text-gray-800">Hi, User 👋</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Admin')}>
-            <View className="h-10 w-10 bg-gray-200 rounded-full items-center justify-center">
-              <Text>👤</Text>
+          <TouchableOpacity onPress={logout}>
+            <View className="bg-red-100 px-3 py-1 rounded-full items-center justify-center">
+              <Text className="text-red-500 font-bold">Logout</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -21,10 +46,14 @@ export default function Dashboard({ navigation }: any) {
         <View className="bg-[#4ECDC4] p-6 rounded-2xl mb-6 shadow-md">
           <Text className="text-white text-lg font-semibold mb-2">Hormone Health Score</Text>
           <View className="flex-row items-end">
-            <Text className="text-white text-5xl font-bold">{healthScore}</Text>
-            <Text className="text-white text-xl mb-1 ml-1">/ 100</Text>
+            {loading ? <ActivityIndicator color="white" /> : (
+               <>
+                 <Text className="text-white text-5xl font-bold">{healthScore}</Text>
+                 <Text className="text-white text-xl mb-1 ml-1">/ 100</Text>
+               </>
+            )}
           </View>
-          <Text className="text-white mt-2 opacity-90">Great job! Your score improved by 5 points this week.</Text>
+          <Text className="text-white mt-2 opacity-90">Based on ML Model Predictions.</Text>
         </View>
 
         <View className="bg-white p-6 rounded-2xl mb-6 shadow-lg border border-gray-100">
