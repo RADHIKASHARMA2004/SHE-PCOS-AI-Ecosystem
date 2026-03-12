@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: she_db
+    environment:
+      POSTGRES_USER: she_user
+      POSTGRES_PASSWORD: she_password
+      POSTGRES_DB: she_pcos
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./seed_data.sql:/docker-entrypoint-initdb.d/seed_data.sql
+
+  backend:
+    build: ./backend
+    container_name: she_backend
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgresql://she_user:she_password@db:5432/she_pcos
+
+volumes:
+  postgres_data:
