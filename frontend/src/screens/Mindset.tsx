@@ -2,57 +2,82 @@ import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+const SHE = { rose: '#FF6B9D', roseLight: '#FFE4EF', blush: '#FFF0F5', lavender: '#C084FC',
+  lavenderLight: '#F3E8FF', textDark: '#1F1329', textMid: '#6B7280' };
+
 export default function Mindset() {
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
-  const moods = ['😊', '😌', '😐', '😔', '😫', '😡'];
+  const moods = [
+    { emoji: '😊', label: 'Happy',   color: '#FEF3C7' },
+    { emoji: '😌', label: 'Calm',    color: '#ECFDF5' },
+    { emoji: '😐', label: 'Neutral', color: '#F3F4F6' },
+    { emoji: '😔', label: 'Sad',     color: '#EDE9FE' },
+    { emoji: '😫', label: 'Tired',   color: '#FDF2F8' },
+    { emoji: '😡', label: 'Angry',   color: '#FEE2E2' },
+  ];
+
+  const meditations = [
+    { emoji: '🧘‍♀️', title: 'Anulom Vilom',       sub: '10 mins · Alternate Nostril', color: '#F3E8FF' },
+    { emoji: '🌙',   title: 'Sleep Deeply',       sub: '20 mins · Yoga Nidra',        color: '#E0F2FE' },
+    { emoji: '🌸',   title: 'Hormonal Harmony',   sub: '15 mins · Body Scan',         color: '#FDF2F8' },
+    { emoji: '💆‍♀️', title: 'Stress Relief',       sub: '8 mins · Box Breathing',      color: '#ECFDF5' },
+  ];
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <ScrollView className="p-4">
-        <Text className="text-3xl font-bold text-purple-500 mb-6">Mindset & Mood</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: SHE.blush }}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <View style={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }}>
+          <Text style={{ fontSize: 28, fontWeight: '900', color: SHE.textDark }}>🧘‍♀️ Mindset</Text>
+          <Text style={{ fontSize: 14, color: SHE.textMid, marginTop: 4 }}>Nurture your mind & spirit 💕</Text>
+        </View>
 
-        <View className="bg-purple-50 p-6 rounded-2xl mb-6 shadow-sm border border-purple-100">
-          <Text className="font-bold text-lg mb-4 text-purple-900 text-center">How are you feeling today?</Text>
-          <View className="flex-row justify-between mb-4">
-            {moods.map((mood, idx) => (
-              <TouchableOpacity 
-                key={idx}
-                className={`p-2 rounded-full ${selectedMood === mood ? 'bg-purple-200' : ''}`}
-                onPress={() => setSelectedMood(mood)}
-              >
-                <Text className="text-3xl">{mood}</Text>
+        {/* Mood Selector */}
+        <View style={{ marginHorizontal: 20, backgroundColor: 'white', borderRadius: 24, padding: 20, marginBottom: 16,
+          shadowColor: '#FF6B9D', shadowOpacity: 0.06, shadowRadius: 12, elevation: 3 }}>
+          <Text style={{ fontWeight: '800', color: SHE.textDark, fontSize: 16, marginBottom: 14 }}>
+            💜 How are you feeling?
+          </Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
+            {moods.map((m) => (
+              <TouchableOpacity key={m.emoji} onPress={() => setSelectedMood(m.emoji)}
+                style={{ alignItems: 'center', backgroundColor: selectedMood === m.emoji ? m.color : '#F9FAFB',
+                  borderRadius: 16, padding: 10, borderWidth: 2,
+                  borderColor: selectedMood === m.emoji ? SHE.lavender : 'transparent' }}>
+                <Text style={{ fontSize: 28 }}>{m.emoji}</Text>
+                <Text style={{ fontSize: 9, color: SHE.textMid, fontWeight: '600', marginTop: 2 }}>{m.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
           {selectedMood && (
-             <TouchableOpacity className="bg-purple-500 py-3 rounded-lg items-center">
-               <Text className="text-white font-bold">Log Mood</Text>
-             </TouchableOpacity>
+            <TouchableOpacity style={{ backgroundColor: SHE.lavender, paddingVertical: 14, borderRadius: 14, alignItems: 'center' }}>
+              <Text style={{ color: 'white', fontWeight: '800', fontSize: 15 }}>💾 Log Mood</Text>
+            </TouchableOpacity>
           )}
         </View>
 
-        <Text className="text-xl font-bold mb-4">Guided Meditations</Text>
-
-        <TouchableOpacity className="bg-gray-50 p-4 rounded-xl mb-4 border border-gray-200 shadow-sm flex-row items-center">
-          <View className="w-16 h-16 bg-purple-200 rounded-lg justify-center items-center mr-4">
-            <Text className="text-2xl">🧘‍♀️</Text>
-          </View>
-          <View className="flex-1">
-            <Text className="font-bold text-lg mb-1">Anulom Vilom</Text>
-            <Text className="text-gray-600">10 mins • Alternate Nostril Breathing</Text>
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity className="bg-gray-50 p-4 rounded-xl mb-4 border border-gray-200 shadow-sm flex-row items-center">
-          <View className="w-16 h-16 bg-purple-200 rounded-lg justify-center items-center mr-4">
-            <Text className="text-2xl">🌙</Text>
-          </View>
-          <View className="flex-1">
-            <Text className="font-bold text-lg mb-1">Sleep Deeply</Text>
-            <Text className="text-gray-600">20 mins • Yoga Nidra</Text>
-          </View>
-        </TouchableOpacity>
-
+        {/* Meditations */}
+        <View style={{ paddingHorizontal: 20, marginBottom: 32 }}>
+          <Text style={{ fontSize: 18, fontWeight: '800', color: SHE.textDark, marginBottom: 12 }}>
+            🌸 Guided Sessions
+          </Text>
+          {meditations.map((m, i) => (
+            <TouchableOpacity key={i}
+              style={{ backgroundColor: m.color, borderRadius: 20, padding: 16, marginBottom: 12,
+                flexDirection: 'row', alignItems: 'center',
+                shadowColor: '#C084FC', shadowOpacity: 0.08, shadowRadius: 8, elevation: 2 }}>
+              <View style={{ width: 58, height: 58, backgroundColor: 'white', borderRadius: 18,
+                justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
+                <Text style={{ fontSize: 28 }}>{m.emoji}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '800', color: SHE.textDark, fontSize: 15 }}>{m.title}</Text>
+                <Text style={{ color: SHE.textMid, fontSize: 13, marginTop: 3 }}>{m.sub}</Text>
+              </View>
+              <Text style={{ fontSize: 22 }}>▶️</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

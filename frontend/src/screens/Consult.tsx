@@ -1,47 +1,69 @@
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+const SHE = { rose: '#FF6B9D', roseDark: '#E5528A', roseLight: '#FFE4EF', blush: '#FFF0F5',
+  mint: '#34D399', textDark: '#1F1329', textMid: '#6B7280' };
+
+const DOCTORS = [
+  { emoji: '👩‍⚕️', name: 'Dr. Priya Sharma',   specialty: 'Gynecologist & PCOS Specialist',    avail: 'Available today',  rating: '4.9 ⭐', color: '#FDF2F8' },
+  { emoji: '🩺',  name: 'Dr. Meera Nair',     specialty: 'Endocrinologist',                     avail: 'Tomorrow 10am',    rating: '4.8 ⭐', color: '#EDE9FE' },
+  { emoji: '🧬',  name: 'Dr. Ananya Singh',   specialty: 'Reproductive Medicine',               avail: 'Available today',  rating: '5.0 ⭐', color: '#ECFDF5' },
+];
+
 export default function Consult() {
-  const doctors = [
-    { id: 1, name: 'Dr. Anjali Sharma', spec: 'Gynecologist', rating: '4.9', exp: '12 yrs' },
-    { id: 2, name: 'Dr. Ritu Desai', spec: 'Endocrinologist', rating: '4.8', exp: '15 yrs' }
-  ];
-
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <ScrollView className="p-4">
-        <Text className="text-3xl font-bold text-teal-600 mb-6">Consult Expert</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: SHE.blush }}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+        <View style={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }}>
+          <Text style={{ fontSize: 28, fontWeight: '900', color: SHE.textDark }}>👩‍⚕️ Consult</Text>
+          <Text style={{ fontSize: 14, color: SHE.textMid, marginTop: 4 }}>Talk to a specialist who gets it 💕</Text>
+        </View>
 
-        <View className="bg-teal-50 p-6 rounded-2xl mb-6 shadow-sm border border-teal-100">
-          <Text className="font-bold text-lg mb-2 text-teal-900">Virtual Consultation</Text>
-          <Text className="text-gray-600 mb-4">Book a 1-on-1 video call with our verified PCOS specialists.</Text>
-          <TouchableOpacity className="bg-teal-600 py-3 rounded-lg items-center">
-             <Text className="text-white font-bold text-lg">Book Now</Text>
+        {/* Hero Banner */}
+        <View style={{ marginHorizontal: 20, marginVertical: 12, backgroundColor: SHE.rose,
+          borderRadius: 24, padding: 22, shadowColor: SHE.rose, shadowOpacity: 0.3, shadowRadius: 16, elevation: 5 }}>
+          <View style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100,
+            borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.15)' }} />
+          <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '700',
+            textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>💜 Free Consultation</Text>
+          <Text style={{ color: 'white', fontWeight: '900', fontSize: 20, lineHeight: 26 }}>
+            Your first session with a PCOS specialist is FREE 🩺
+          </Text>
+          <TouchableOpacity style={{ backgroundColor: 'white', borderRadius: 12, paddingVertical: 10,
+            paddingHorizontal: 18, marginTop: 14, alignSelf: 'flex-start' }}>
+            <Text style={{ color: SHE.roseDark, fontWeight: '800', fontSize: 13 }}>Book Now →</Text>
           </TouchableOpacity>
         </View>
 
-        <Text className="text-xl font-bold mb-4 text-gray-800">Available Specialists</Text>
-        
-        {doctors.map(doc => (
-          <View key={doc.id} className="bg-white p-4 rounded-xl mb-4 border border-gray-200 shadow-sm flex-row items-center">
-            <View className="w-16 h-16 bg-gray-200 rounded-full justify-center items-center mr-4">
-              <Text className="text-2xl">👩‍⚕️</Text>
-            </View>
-            <View className="flex-1">
-              <Text className="font-bold text-lg text-gray-800">{doc.name}</Text>
-              <Text className="text-gray-500 mb-1">{doc.spec} • {doc.exp} Exp</Text>
-              <View className="flex-row items-center">
-                <Text className="text-yellow-500 mr-1">⭐</Text>
-                <Text className="font-semibold text-gray-700">{doc.rating}</Text>
+        {/* Doctors */}
+        <View style={{ paddingHorizontal: 20, marginBottom: 32 }}>
+          <Text style={{ fontSize: 18, fontWeight: '800', color: SHE.textDark, marginBottom: 12 }}>
+            🌸 Available Specialists
+          </Text>
+          {DOCTORS.map((d, i) => (
+            <View key={i} style={{ backgroundColor: d.color, borderRadius: 20, padding: 18, marginBottom: 12,
+              shadowColor: '#FF6B9D', shadowOpacity: 0.07, shadowRadius: 10, elevation: 2 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                <View style={{ width: 54, height: 54, backgroundColor: 'white', borderRadius: 18,
+                  justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
+                  <Text style={{ fontSize: 28 }}>{d.emoji}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: '800', color: SHE.textDark, fontSize: 15 }}>{d.name}</Text>
+                  <Text style={{ color: SHE.textMid, fontSize: 12, marginTop: 2 }}>{d.specialty}</Text>
+                  <Text style={{ color: SHE.mint, fontSize: 12, fontWeight: '700', marginTop: 2 }}>{d.rating}</Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ color: SHE.textMid, fontSize: 12 }}>🕒 {d.avail}</Text>
+                <TouchableOpacity style={{ backgroundColor: SHE.rose, paddingHorizontal: 18, paddingVertical: 8, borderRadius: 99 }}>
+                  <Text style={{ color: 'white', fontWeight: '800', fontSize: 13 }}>Book 💕</Text>
+                </TouchableOpacity>
               </View>
             </View>
-            <TouchableOpacity className="border border-teal-600 px-4 py-2 rounded-lg">
-              <Text className="text-teal-600 font-bold">View</Text>
-            </TouchableOpacity>
-          </View>
-        ))}
-
+          ))}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

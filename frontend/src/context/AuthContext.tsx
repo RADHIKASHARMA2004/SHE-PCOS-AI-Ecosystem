@@ -6,6 +6,7 @@ interface AuthContextType {
   userToken: string | null;
   isLoading: boolean;
   login: (username: string, pass: string) => Promise<boolean>;
+  signup: (userData: any) => Promise<boolean>;
   logout: () => void;
 }
 
@@ -13,6 +14,7 @@ const AuthContext = createContext<AuthContextType>({
   userToken: null,
   isLoading: true,
   login: async () => false,
+  signup: async () => false,
   logout: () => {},
 });
 
@@ -55,9 +57,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return true;
       }
       return false;
-    } catch (e) {
-      console.error("Login failed:", e);
+    } catch (e: any) {
+      console.error("Login failed. Message:", e.message);
+      if (e.response) {
+         console.error("Response data:", e.response.data);
+         console.error("Response status:", e.response.status);
+      }
       return false;
+    }
+  };
+
+  const signup = async (userData: any) => {
+    try {
+      const res = await apiClient.post('/auth/signup', userData);
+      if (res.data.msg) {
+        // Automatically login the user after successful signup
+        return await login(userData.username, userData.password);
+      } else if (res.data.error) {
+        throw new Error(res.data.error);
+      }
+      return false;
+    } catch (e: any) {
+      console.error("Signup failed.", e.message);
+      if (e.response && e.response.data && e.response.data.detail) {
+          throw new Error(e.response.data.detail);
+      }
+      throw new Error(e.message || "Failed to create account");
     }
   };
 
@@ -68,7 +93,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ userToken, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ userToken, isLoading, login, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );

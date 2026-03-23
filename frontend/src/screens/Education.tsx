@@ -2,38 +2,65 @@ import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+const SHE = { rose: '#FF6B9D', roseLight: '#FFE4EF', blush: '#FFF0F5',
+  lavender: '#C084FC', lavenderLight: '#F3E8FF', textDark: '#1F1329', textMid: '#6B7280' };
+
+const ARTICLES = [
+  { emoji: '🩺', title: 'PCOS & Insulin Resistance',       sub: '5 min read · Medical',       color: '#FEE2E2' },
+  { emoji: '🌿', title: 'Top 10 Foods for Hormone Balance', sub: '4 min read · Nutrition',      color: '#ECFDF5' },
+  { emoji: '🧬', title: 'Understanding Your Hormones',      sub: '7 min read · Science',        color: '#EDE9FE' },
+  { emoji: '💤', title: 'How Sleep Affects Your Cycle',     sub: '3 min read · Lifestyle',      color: '#E0F2FE' },
+  { emoji: '🧘‍♀️', title: 'Yoga Poses for Period Pain',   sub: '6 min read · Wellness',       color: '#FDF2F8' },
+];
+
 export default function Education() {
-  const articles = [
-    { id: 1, title: 'Understanding Insulin Resistance', category: 'Health', readTime: '5 min' },
-    { id: 2, title: 'Seed Cycling for Hormonal Balance', category: 'Nutrition', readTime: '4 min' },
-    { id: 3, title: 'Managing Cortisol Levels naturally', category: 'Mindset', readTime: '6 min' },
-    { id: 4, title: 'The Role of Myo-Inositol', category: 'Supplements', readTime: '5 min' }
-  ];
-
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <ScrollView className="p-4">
-        <Text className="text-3xl font-bold text-green-600 mb-6">Education Hub</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: SHE.blush }}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+        <View style={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }}>
+          <Text style={{ fontSize: 28, fontWeight: '900', color: SHE.textDark }}>📚 Education</Text>
+          <Text style={{ fontSize: 14, color: SHE.textMid, marginTop: 4 }}>Science-backed knowledge for your health 🧬</Text>
+        </View>
 
-        <View className="bg-green-50 p-6 rounded-2xl mb-6 shadow-sm border border-green-100">
-          <Text className="font-bold text-lg mb-2 text-green-900">Featured Article</Text>
-          <Text className="text-xl font-bold mb-2">PCOS and the Indian Diet</Text>
-          <Text className="text-gray-600 mb-4">Learn how traditional Indian spices like turmeric and cinnamon can aid in PCOS management.</Text>
-          <TouchableOpacity className="bg-green-600 py-2 px-4 rounded-lg self-start">
-            <Text className="text-white font-bold">Read Now</Text>
+        {/* Featured Banner */}
+        <View style={{ marginHorizontal: 20, marginVertical: 12, backgroundColor: SHE.lavender,
+          borderRadius: 24, padding: 22, shadowColor: SHE.lavender, shadowOpacity: 0.3, shadowRadius: 16, elevation: 5 }}>
+          <View style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100,
+            borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.15)' }} />
+          <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: '700',
+            textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>✨ Featured</Text>
+          <Text style={{ color: 'white', fontWeight: '900', fontSize: 20, marginBottom: 6, lineHeight: 26 }}>
+            Complete Guide to Understanding PCOS
+          </Text>
+          <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 13 }}>10 min read · pinned by SHE team 🌸</Text>
+          <TouchableOpacity style={{ backgroundColor: 'white', borderRadius: 12, padding: 10,
+            marginTop: 14, alignSelf: 'flex-start' }}>
+            <Text style={{ color: SHE.lavender, fontWeight: '800', fontSize: 13 }}>Read Now →</Text>
           </TouchableOpacity>
         </View>
 
-        <Text className="text-xl font-bold mb-4">Recent Articles</Text>
-        
-        {articles.map(article => (
-          <TouchableOpacity key={article.id} className="bg-white p-4 rounded-xl mb-3 border border-gray-200 shadow-sm">
-            <Text className="text-xs text-green-600 font-bold uppercase tracking-wider mb-1">{article.category}</Text>
-            <Text className="font-bold text-lg mb-2 text-gray-800">{article.title}</Text>
-            <Text className="text-gray-500 text-sm">Read Time: {article.readTime}</Text>
-          </TouchableOpacity>
-        ))}
-
+        {/* Articles */}
+        <View style={{ paddingHorizontal: 20, marginBottom: 32 }}>
+          <Text style={{ fontSize: 18, fontWeight: '800', color: SHE.textDark, marginBottom: 12 }}>
+            🌸 Latest Articles
+          </Text>
+          {ARTICLES.map((a, i) => (
+            <TouchableOpacity key={i}
+              style={{ backgroundColor: a.color, borderRadius: 20, padding: 16, marginBottom: 12,
+                flexDirection: 'row', alignItems: 'center',
+                shadowColor: '#FF6B9D', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
+              <View style={{ width: 54, height: 54, backgroundColor: 'white', borderRadius: 16,
+                justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
+                <Text style={{ fontSize: 26 }}>{a.emoji}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '800', color: SHE.textDark, fontSize: 14 }}>{a.title}</Text>
+                <Text style={{ color: SHE.textMid, fontSize: 12, marginTop: 3 }}>{a.sub}</Text>
+              </View>
+              <Text style={{ fontSize: 18 }}>→</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

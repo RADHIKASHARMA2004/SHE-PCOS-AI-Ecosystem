@@ -1,47 +1,58 @@
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const SHE = { rose: '#FF6B9D', roseLight: '#FFE4EF', blush: '#FFF0F5',
+  lavender: '#C084FC', lavenderLight: '#F3E8FF', textDark: '#1F1329', textMid: '#6B7280' };
+
+const STATS = [
+  { label: 'Total Users',    value: '247',  emoji: '👩',  color: SHE.roseLight,      text: '#BE185D' },
+  { label: 'Active Today',   value: '38',   emoji: '🌸',  color: '#FFFBEB',          text: '#92400E' },
+  { label: 'Cycles Logged',  value: '1,204',emoji: '🩸',  color: '#EDE9FE',          text: '#6B21A8' },
+  { label: 'AI Predictions', value: '918',  emoji: '✨',  color: '#ECFDF5',          text: '#065F46' },
+];
+
+const ERRORS = [
+  { level: 'Warning', msg: 'ML model not trained. RandomForest fallback is active.', color: '#FEF3C7', text: '#92400E' },
+  { level: 'Info',    msg: '38 new users signed up this week 🌸',                    color: '#ECFDF5', text: '#065F46' },
+  { level: 'Error',   msg: 'LSTM stub model not loaded — predictions use mean only.', color: SHE.roseLight, text: '#BE185D' },
+];
 
 export default function Admin() {
   return (
-    <SafeAreaView className="flex-1 bg-gray-900">
-      <ScrollView className="p-4">
-        <Text className="text-3xl font-bold text-white mb-6">Developer Analytics</Text>
-
-        <View className="flex-row flex-wrap justify-between mb-6">
-          <View className="w-[48%] bg-gray-800 p-4 rounded-xl mb-4 border border-gray-700">
-            <Text className="text-gray-400 mb-1 font-semibold">Total Users</Text>
-            <Text className="text-3xl font-bold text-white">1,245</Text>
-            <Text className="text-green-400 text-xs mt-1">↑ 12% this week</Text>
-          </View>
-          
-          <View className="w-[48%] bg-gray-800 p-4 rounded-xl mb-4 border border-gray-700">
-            <Text className="text-gray-400 mb-1 font-semibold">Active Models</Text>
-            <Text className="text-2xl font-bold text-white mt-1">RandomForest</Text>
-            <Text className="text-green-400 text-xs mt-1">Accuracy: 92%</Text>
-          </View>
-
-          <View className="w-[48%] bg-gray-800 p-4 rounded-xl mb-4 border border-gray-700">
-             <Text className="text-gray-400 mb-1 font-semibold">API Health</Text>
-             <Text className="text-2xl font-bold text-green-400 mt-1">100% UP</Text>
-          </View>
-
-          <View className="w-[48%] bg-gray-800 p-4 rounded-xl mb-4 border border-gray-700">
-             <Text className="text-gray-400 mb-1 font-semibold">DB Size</Text>
-             <Text className="text-2xl font-bold text-white mt-1">2.4 GB</Text>
-          </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: SHE.blush }}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+        <View style={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }}>
+          <Text style={{ fontSize: 28, fontWeight: '900', color: SHE.textDark }}>📊 Analytics</Text>
+          <Text style={{ fontSize: 14, color: SHE.textMid, marginTop: 4 }}>Developer dashboard · SHE v1.0 🌸</Text>
         </View>
 
-        <Text className="text-xl font-bold mb-4 text-white">System Actions</Text>
-        
-        <TouchableOpacity className="bg-blue-600 p-4 rounded-xl mb-4 items-center">
-          <Text className="text-white font-bold text-lg">Retrain ML Models</Text>
-        </TouchableOpacity>
+        {/* Stats grid */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 20, gap: 12, marginVertical: 12 }}>
+          {STATS.map((s, i) => (
+            <View key={i} style={{ width: '46%', backgroundColor: s.color, borderRadius: 20, padding: 18,
+              shadowColor: '#FF6B9D', shadowOpacity: 0.07, shadowRadius: 10, elevation: 2 }}>
+              <Text style={{ fontSize: 30, marginBottom: 6 }}>{s.emoji}</Text>
+              <Text style={{ fontSize: 28, fontWeight: '900', color: s.text }}>{s.value}</Text>
+              <Text style={{ fontSize: 12, color: s.text, opacity: 0.75, fontWeight: '600', marginTop: 2 }}>{s.label}</Text>
+            </View>
+          ))}
+        </View>
 
-        <TouchableOpacity className="bg-red-600 p-4 rounded-xl mb-4 items-center">
-          <Text className="text-white font-bold text-lg">Clear Cache</Text>
-        </TouchableOpacity>
-
+        {/* System Logs */}
+        <View style={{ paddingHorizontal: 20, marginBottom: 32 }}>
+          <Text style={{ fontSize: 18, fontWeight: '800', color: SHE.textDark, marginBottom: 12 }}>
+            🔍 System Logs
+          </Text>
+          {ERRORS.map((e, i) => (
+            <View key={i} style={{ backgroundColor: e.color, borderRadius: 16, padding: 14, marginBottom: 10,
+              borderLeftWidth: 4, borderLeftColor: e.text }}>
+              <Text style={{ fontWeight: '800', color: e.text, fontSize: 12,
+                textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{e.level}</Text>
+              <Text style={{ color: e.text, fontSize: 13 }}>{e.msg}</Text>
+            </View>
+          ))}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

@@ -1,8 +1,9 @@
+import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, ActivityIndicator } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import LoginScreen from './src/screens/LoginScreen';
 
@@ -23,50 +24,134 @@ import Admin from './src/screens/Admin';
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
+// 🎀 SHE Design Tokens
+const SHE = {
+  rose: '#FF6B9D',
+  roseDark: '#E5528A',
+  roseLight: '#FFE4EF',
+  blush: '#FFF0F5',
+  lavender: '#C084FC',
+  lavenderLight: '#F3E8FF',
+  mint: '#34D399',
+  gold: '#FBC74D',
+  textDark: '#1F1329',
+  textMid: '#6B7280',
+  white: '#FFFFFF',
+};
+
+const TabIcons: Record<string, string> = {
+  Home: '🏠',
+  Cycle: '🩸',
+  'AI Lab': '✨',
+  Medical: '🏥',
+  More: '💜',
+};
+
 function BottomTabs() {
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false, tabBarActiveTintColor: '#FF6B6B' }}>
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarActiveTintColor: SHE.rose,
+        tabBarInactiveTintColor: '#C9B8CB',
+        tabBarStyle: {
+          backgroundColor: '#FFFFFF',
+          borderTopWidth: 0,
+          elevation: 20,
+          shadowColor: '#FF6B9D',
+          shadowOpacity: 0.15,
+          shadowRadius: 20,
+          height: 68,
+          paddingBottom: 10,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '700',
+        },
+        tabBarIcon: ({ focused }) => (
+          <Text style={{ fontSize: focused ? 24 : 20 }}>{TabIcons[route.name]}</Text>
+        ),
+      })}
+    >
       <Tab.Screen name="Home" component={Dashboard} />
       <Tab.Screen name="Cycle" component={CycleTracker} />
       <Tab.Screen name="AI Lab" component={AILab} />
-      <Tab.Screen name="Food" component={Nutrition} />
+      <Tab.Screen name="Medical" component={MedicalVault} />
       <Tab.Screen name="More" component={MoreStack} />
     </Tab.Navigator>
   );
 }
 
-// Stack for additional features not on main bottom tab
 function MoreStack() {
   return (
-    <Stack.Navigator>
-      <Stack.Screen name="MoreMenu" component={MoreMenuScreen} options={{ title: 'More Features' }} />
+    <Stack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: SHE.blush },
+        headerTintColor: SHE.roseDark,
+        headerTitleStyle: { fontWeight: '800', color: SHE.textDark },
+        headerShadowVisible: false,
+      }}
+    >
+      <Stack.Screen name="MoreMenu" component={MoreMenuScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Nutrition" component={Nutrition} options={{ title: '🥗 Diet Matrix' }} />
       <Stack.Screen name="Fitness" component={Fitness} />
-      <Stack.Screen name="MedicalVault" component={MedicalVault} />
+      <Stack.Screen name="MedicalVault" component={MedicalVault} options={{ title: '🏥 Medical Vault' }} />
       <Stack.Screen name="Mindset" component={Mindset} />
       <Stack.Screen name="Education" component={Education} />
       <Stack.Screen name="Community" component={Community} />
-      <Stack.Screen name="Gamification" component={Gamification} />
+      <Stack.Screen name="Gamification" component={Gamification} options={{ title: '🏆 Challenges' }} />
       <Stack.Screen name="Consult" component={Consult} />
-      <Stack.Screen name="Admin" component={Admin} />
+      <Stack.Screen name="Admin" component={Admin} options={{ title: '📊 Developer Analytics' }} />
     </Stack.Navigator>
   );
 }
 
-// Temporary Menu Screen for "More" tab
+const MORE_ITEMS = [
+  { screen: 'Nutrition',    emoji: '🥗', label: 'Diet Matrix',     color: '#DCFCE7' },
+  { screen: 'Fitness',      emoji: '🏃‍♀️', label: 'Fitness',        color: '#FEE2E2' },
+  { screen: 'MedicalVault', emoji: '🏥', label: 'Medical Vault',   color: '#EDE9FE' },
+  { screen: 'Mindset',      emoji: '🧘‍♀️', label: 'Mindset',        color: '#ECFDF5' },
+  { screen: 'Education',    emoji: '📚', label: 'Education',       color: '#FEF3C7' },
+  { screen: 'Community',    emoji: '💬', label: 'Community',       color: '#FDF2F8' },
+  { screen: 'Gamification', emoji: '🏆', label: 'Achievements',    color: '#FFF7ED' },
+  { screen: 'Consult',      emoji: '👩‍⚕️', label: 'Consult a Doctor',color: '#F0FDF4' },
+  { screen: 'Admin',        emoji: '📊', label: 'Analytics',       color: '#F8FAFC' },
+];
+
 function MoreMenuScreen({ navigation }: any) {
-  const menus = ['Fitness', 'MedicalVault', 'Mindset', 'Education', 'Community', 'Gamification', 'Consult', 'Admin'];
   return (
-    <View className="flex-1 bg-white p-4">
-      {menus.map((item) => (
-        <Text
-          key={item}
-          className="p-4 my-2 bg-gray-100 rounded-lg text-lg text-center font-bold text-gray-700 shadow-sm"
-          onPress={() => navigation.navigate(item)}
-        >
-          {item}
-        </Text>
-      ))}
-    </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: SHE.blush }}>
+      {/* Decorative header */}
+      <View style={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 16 }}>
+        <Text style={{ fontSize: 28, fontWeight: '900', color: SHE.roseDark }}>✨ More</Text>
+        <Text style={{ fontSize: 14, color: SHE.textMid, marginTop: 4 }}>Explore everything SHE has to offer 💕</Text>
+      </View>
+
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, gap: 12 }}>
+        {MORE_ITEMS.map((item) => (
+          <TouchableOpacity
+            key={item.screen}
+            onPress={() => navigation.navigate(item.screen)}
+            style={{
+              width: '46%',
+              backgroundColor: item.color,
+              borderRadius: 20,
+              padding: 20,
+              alignItems: 'center',
+              shadowColor: '#FF6B9D',
+              shadowOpacity: 0.08,
+              shadowRadius: 12,
+              elevation: 3,
+              borderWidth: 1,
+              borderColor: '#FFF0F5',
+            }}
+          >
+            <Text style={{ fontSize: 36, marginBottom: 8 }}>{item.emoji}</Text>
+            <Text style={{ fontSize: 13, fontWeight: '800', color: SHE.textDark, textAlign: 'center' }}>{item.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -75,8 +160,10 @@ function RootNavigator() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 justify-center items-center">
-        <ActivityIndicator size="large" color="#FF6B6B" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: SHE.blush }}>
+        <Text style={{ fontSize: 48, marginBottom: 12 }}>🌸</Text>
+        <ActivityIndicator size="large" color={SHE.rose} />
+        <Text style={{ color: SHE.rose, fontWeight: '700', marginTop: 12 }}>Loading SHE...</Text>
       </View>
     );
   }
