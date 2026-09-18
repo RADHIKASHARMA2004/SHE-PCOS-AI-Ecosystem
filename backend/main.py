@@ -8,14 +8,28 @@ import joblib
 import os
 import numpy as np
 
+from fastapi.middleware.cors import CORSMiddleware
+
 # Try to import models relative to the local backend structure
 from models import Base, User, Cycle, FoodItem, MealLog, DailyNutritionTarget, MedicalReport
 
 app = FastAPI(title="SHE PCOS Ecosystem MVP")
 
+# Enable CORS for web and mobile clients
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Database Setup
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./she_pcos.db")
-engine = create_engine(DATABASE_URL)
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base.metadata.create_all(bind=engine)
 
