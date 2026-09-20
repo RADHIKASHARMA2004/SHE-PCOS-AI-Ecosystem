@@ -23,6 +23,9 @@
         "backgroundColor": "#ffffff"
       }
     },
+    "web": {
+      "bundler": "metro"
+},
     "newArchEnabled": true,
     "plugins": [
       "expo-asset"

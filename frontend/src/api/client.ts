@@ -4,7 +4,15 @@ import { Platform } from 'react-native';
 
 // For Android Emulator, localhost is 10.0.2.2. For iOS it's usually localhost or 127.0.0.1
 // If testing on a physical device, this MUST be the IP address of your computer on the local Wi-Fi (e.g., 192.168.1.x)
-const BASE_URL = 'https://she-pcos-api.onrender.com'; // Updated to current Wi-Fi IP (192.168.1.6)
+// Dynamic base URL: uses current hostname on web, or local Wi-Fi IP for mobile/emulators
+const getBaseUrl = () => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
+    return `http://${window.location.hostname}:8000`;
+  }
+  return 'http://192.168.1.6:8000';
+};
+
+const BASE_URL = getBaseUrl();
 
 export const apiClient = axios.create({
   baseURL: BASE_URL,

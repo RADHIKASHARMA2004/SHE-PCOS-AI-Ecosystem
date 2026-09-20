@@ -1,4 +1,6 @@
+import "./global.css";
 import React from 'react';
+import { NativeWindStyleSheet } from "nativewind";
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -23,6 +25,11 @@ import Admin from './src/screens/Admin';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
+
+NativeWindStyleSheet.setOutput({
+  web: "css",
+  default: "native",
+});
 
 // 🎀 SHE Design Tokens
 const SHE = {
