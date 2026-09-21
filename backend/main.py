@@ -3,7 +3,9 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
+import json
+import ast
 import joblib
 import os
 import numpy as np
@@ -483,6 +485,401 @@ def update_settings(settings: dict, current_user: User = Depends(get_current_use
     db.commit()
     return {"msg": "Settings updated"}
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# ─── CLINICAL REFERENCE RANGES & DETERMINISTIC SCREENING ENGINE ──────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Clinical reference ranges (female, reproductive age)
+LAB_RANGES = {
+    "lh":              {"low": 1.0,   "high": 12.0,  "unit": "mIU/mL",  "name": "LH"},
+    "fsh":             {"low": 3.0,   "high": 10.0,  "unit": "mIU/mL",  "name": "FSH"},
+    "lh_fsh_ratio":    {"low": 0.5,   "high": 2.0,   "unit": "ratio",   "name": "LH:FSH Ratio"},
+    "prolactin":       {"low": 2.8,   "high": 29.2,  "unit": "ng/mL",   "name": "Prolactin"},
+    "testosterone":    {"low": 15.0,  "high": 55.0,  "unit": "ng/dL",   "name": "Testosterone"},
+    "amh":             {"low": 1.0,   "high": 3.5,   "unit": "ng/mL",   "name": "AMH"},
+    "fasting_insulin": {"low": 2.0,   "high": 10.0,  "unit": "μIU/mL",  "name": "Fasting Insulin"},
+    "fasting_glucose": {"low": 70.0,  "high": 99.0,  "unit": "mg/dL",   "name": "Fasting Glucose"},
+    "homa_ir":         {"low": 0.0,   "high": 1.9,   "unit": "index",   "name": "HOMA-IR (Insulin Resistance)"},
+    "vitamin_d3":      {"low": 30.0,  "high": 100.0, "unit": "ng/mL",   "name": "Vitamin D3"},
+    "b12":             {"low": 200.0, "high": 900.0, "unit": "pg/mL",   "name": "Vitamin B12"},
+    "ferritin":        {"low": 12.0,  "high": 150.0, "unit": "ng/mL",   "name": "Ferritin"},
+    "follicle_count":  {"low": 0,     "high": 11,    "unit": "follicles","name": "Antral Follicle Count"},
+    "ovarian_volume":  {"low": 0.0,   "high": 10.0,  "unit": "mL",      "name": "Ovarian Volume"},
+    "progesterone":    {"low": 5.0,   "high": 25.0,  "unit": "ng/mL",   "name": "Progesterone (Mid-Luteal)"},
+}
+
+def parse_list_safely(val):
+    """Safely extracts a list of strings from JSON, Python string representation, or list."""
+    if not val:
+        return []
+    if isinstance(val, list):
+        return [str(x).strip() for x in val if str(x).strip()]
+    if isinstance(val, str):
+        v = val.strip()
+        if not v or v in ['[]', 'None', 'null', "''", '""']:
+            return []
+        try:
+            res = json.loads(v)
+            if isinstance(res, list):
+                return [str(x).strip() for x in res if str(x).strip()]
+        except Exception:
+            pass
+        try:
+            res = ast.literal_eval(v)
+            if isinstance(res, list):
+                return [str(x).strip() for x in res if str(x).strip()]
+        except Exception:
+            pass
+        return [x.strip(" '\"[]") for x in v.split(",") if x.strip(" '\"[]")]
+    return []
+
+def normalize_activity_level(val: str) -> str:
+    """Normalizes UI activity strings (e.g. 'Moderate activity') into canonical enum values."""
+    if not val:
+        return "Unknown"
+    v = str(val).strip().lower()
+    if "sedentary" in v:
+        return "Sedentary"
+    if "light" in v:
+        return "Light"
+    if "mod" in v:
+        return "Moderate"
+    if "high" in v or "active" in v or "very" in v:
+        return "Active"
+    return str(val).strip()
+
+def calculate_pcos_screening_score(user_data: dict = None, cycles_data: list = None, biomarkers_data: dict = None) -> dict:
+    """
+    Deterministic PCOS Screening & Hormonal Health Scoring Engine (Exact 100-point total).
+    
+    Weights:
+      Domain 1: Menstrual / Ovulatory Dysfunction     (Max: 35)
+      Domain 2: Hyperandrogenism                      (Max: 25)
+      Domain 3: Reported Clinical History & Findings  (Max: 20)
+      Domain 4: Metabolic & Lifestyle Risk            (Max: 20)
+      Total: 35 + 25 + 20 + 20 = 100
+      
+    Hormone Health Index = 100 - Screening Risk Score (Range: 0 - 100)
+    This is an educational screening support metric, NOT a medical diagnosis.
+    """
+    if cycles_data is None:
+        cycles_data = []
+    if biomarkers_data is None:
+        biomarkers_data = {}
+    user_data = user_data or {}
+
+    lifestyle_habits = parse_list_safely(user_data.get('lifestyle_habits'))
+    health_conditions = parse_list_safely(user_data.get('health_conditions'))
+    symptom_baseline = parse_list_safely(user_data.get('symptom_baseline'))
+    health_concerns = parse_list_safely(user_data.get('health_concerns'))
+
+    # ── DOMAIN 1: Menstrual / Ovulatory Dysfunction (Max: 35) ─────────────────
+    evidence_d1 = []
+    d1_points = 0
+    cycle_reg = str(user_data.get('cycle_regularity') or '').strip().lower()
+
+    if len(cycles_data) >= 2:
+        cl = []
+        for i in range(1, len(cycles_data)):
+            d_curr = cycles_data[i].get('start_date')
+            d_prev = cycles_data[i-1].get('start_date')
+            if d_curr and d_prev:
+                if isinstance(d_curr, str):
+                    try: d_curr = datetime.strptime(d_curr.split('T')[0], '%Y-%m-%d').date()
+                    except: d_curr = None
+                elif isinstance(d_curr, datetime):
+                    d_curr = d_curr.date()
+                if isinstance(d_prev, str):
+                    try: d_prev = datetime.strptime(d_prev.split('T')[0], '%Y-%m-%d').date()
+                    except: d_prev = None
+                elif isinstance(d_prev, datetime):
+                    d_prev = d_prev.date()
+                if d_curr and d_prev:
+                    days_diff = (d_curr - d_prev).days
+                    if days_diff > 0:
+                        cl.append(days_diff)
+        if cl:
+            avg_len = float(np.mean(cl))
+            std_len = float(np.std(cl))
+            irr_count = sum(1 for l in cl if l > 35 or l < 21)
+            irr_ratio = irr_count / len(cl)
+            if avg_len < 21 or avg_len > 35 or std_len > 7.0 or irr_ratio >= 0.5:
+                d1_points = 35
+                evidence_d1.append(f"Tracked irregular cycles: avg {avg_len:.1f}d, std {std_len:.1f}d ({irr_count}/{len(cl)} irregular)")
+            elif (32 <= avg_len <= 35) or (4.0 <= std_len <= 7.0):
+                d1_points = 15
+                evidence_d1.append(f"Tracked borderline cycle variation: avg {avg_len:.1f}d, std {std_len:.1f}d")
+            else:
+                d1_points = 0
+                evidence_d1.append(f"Tracked regular cycles: avg {avg_len:.1f}d, std {std_len:.1f}d")
+        else:
+            if cycle_reg == 'no':
+                d1_points = 25
+                evidence_d1.append("Self-reported irregular menstrual cycles")
+            elif cycle_reg in ['unknown', '']:
+                d1_points = 5
+                evidence_d1.append("Cycle regularity unknown / unmonitored (uncertainty penalty)")
+            elif cycle_reg == 'yes':
+                d1_points = 0
+                evidence_d1.append("Self-reported regular menstrual cycles")
+    else:
+        if cycle_reg == 'no':
+            d1_points = 25
+            evidence_d1.append("Self-reported irregular menstrual cycles")
+        elif cycle_reg in ['unknown', '']:
+            d1_points = 5
+            evidence_d1.append("Cycle regularity unknown / unmonitored (uncertainty penalty)")
+        elif cycle_reg == 'yes':
+            d1_points = 0
+            evidence_d1.append("Self-reported regular menstrual cycles")
+
+    # Biochemical check for anovulation (luteal progesterone)
+    prog_val = biomarkers_data.get('progesterone')
+    prog_ref_low = biomarkers_data.get('progesterone_ref_low', LAB_RANGES['progesterone']['low'])
+    if prog_val is not None:
+        if prog_val < prog_ref_low:
+            d1_points = 35
+            evidence_d1.append(f"Mid-luteal progesterone low ({prog_val} vs ref low {prog_ref_low} ng/mL), indicating anovulation")
+
+    # Contraception context
+    birth_control = str(user_data.get('birth_control') or 'None').strip()
+    is_medication_regulated = birth_control.lower() not in ['none', 'no', 'unknown', '']
+    if is_medication_regulated:
+        evidence_d1.append(f"Hormonal contraception reported ({birth_control}); cycle bleeding may be medication-regulated")
+
+    d1_score = min(35, max(0, d1_points))
+
+    # ── DOMAIN 2: Hyperandrogenism (Max: 25) ──────────────────────────────────
+    # Note: Mental health, energy, and diet are strictly excluded here
+    evidence_d2 = []
+    d2_points = 0
+
+    all_symptom_tags = [x.lower() for x in (lifestyle_habits + health_concerns)]
+    has_skin_concern = any(s in all_symptom_tags for s in ['skin', 'acne'])
+    if has_skin_concern:
+        d2_points += 10
+        evidence_d2.append("Self-reported skin / acne concern")
+
+    acne_vals = [c.get('acne_scale') for c in cycles_data if c.get('acne_scale') is not None]
+    if acne_vals:
+        avg_acne = float(np.mean(acne_vals))
+        if avg_acne > 6:
+            d2_points += 15
+            evidence_d2.append(f"Tracked acne scale severe (avg {avg_acne:.1f}/10)")
+        elif avg_acne >= 4:
+            d2_points += 8
+            evidence_d2.append(f"Tracked acne scale moderate (avg {avg_acne:.1f}/10)")
+        else:
+            evidence_d2.append(f"Tracked acne scale mild/none (avg {avg_acne:.1f}/10)")
+
+    hirs_vals = [c.get('hair_loss_scale') for c in cycles_data if c.get('hair_loss_scale') is not None]
+    if hirs_vals:
+        avg_hirs = float(np.mean(hirs_vals))
+        if avg_hirs > 6:
+            d2_points += 15
+            evidence_d2.append(f"Tracked hair loss / hirsutism scale severe (avg {avg_hirs:.1f}/10)")
+        elif avg_hirs >= 4:
+            d2_points += 8
+            evidence_d2.append(f"Tracked hair loss / hirsutism scale moderate (avg {avg_hirs:.1f}/10)")
+        else:
+            evidence_d2.append(f"Tracked hair loss / hirsutism scale mild/none (avg {avg_hirs:.1f}/10)")
+
+    # Biochemical labs: check against laboratory reference range
+    testo = biomarkers_data.get('testosterone')
+    testo_ref_high = biomarkers_data.get('testosterone_ref_high', LAB_RANGES['testosterone']['high'])
+    if testo is not None:
+        if testo > testo_ref_high:
+            d2_points = 25  # direct biochemical hyperandrogenism elevates to domain maximum
+            evidence_d2.append(f"Biochemical hyperandrogenism: Testosterone {testo} ng/dL exceeds laboratory reference high ({testo_ref_high} ng/dL)")
+        else:
+            evidence_d2.append(f"Testosterone {testo} ng/dL within laboratory reference range (<= {testo_ref_high} ng/dL)")
+
+    d2_score = min(25, max(0, d2_points))
+
+    # ── DOMAIN 3: Reported Clinical History & Findings (Max: 20) ──────────────
+    evidence_d3 = []
+    d3_points = 0
+    reported_pcos_history = False
+
+    conds_lower = [c.lower() for c in health_conditions]
+    if any('pcos' in c or 'pcod' in c for c in conds_lower):
+        d3_points = 20
+        reported_pcos_history = True
+        evidence_d3.append("Self-reported history of PCOS/PCOD diagnosis")
+    else:
+        if any('thyroid' in c for c in conds_lower):
+            d3_points += 10
+            evidence_d3.append("Self-reported history of Thyroid disorder")
+        if any('endometriosis' in c for c in conds_lower):
+            d3_points += 10
+            evidence_d3.append("Self-reported history of Endometriosis")
+
+    follicles = biomarkers_data.get('follicle_count')
+    volume = biomarkers_data.get('ovarian_volume')
+    if follicles is not None or volume is not None:
+        is_pco = (follicles is not None and follicles >= 12) or (volume is not None and volume > 10.0)
+        if is_pco:
+            d3_points = 20
+            evidence_d3.append(f"Pelvic ultrasound confirms polycystic ovarian morphology (Follicles: {follicles}, Volume: {volume} mL)")
+        else:
+            evidence_d3.append(f"Pelvic ultrasound morphology within normal limits (Follicles: {follicles}, Volume: {volume} mL)")
+    else:
+        evidence_d3.append("Pelvic ultrasound: unassessed / no reports uploaded")
+
+    d3_score = min(20, max(0, d3_points))
+
+    # ── DOMAIN 4: Metabolic & Lifestyle Risk (Max: 20) ─────────────────────────
+    evidence_d4 = []
+    metabolic_burden = 0
+    protective_mitigation = 0
+
+    bmi = user_data.get('bmi')
+    height = user_data.get('height')
+    weight = user_data.get('weight')
+    if (bmi is None or bmi <= 0) and height and weight:
+        h_m = (height / 100.0) if height > 3.0 else height
+        if h_m > 0:
+            bmi = round(weight / (h_m ** 2), 1)
+
+    if bmi is not None and bmi > 0:
+        if bmi >= 30.0:
+            metabolic_burden += 14
+            evidence_d4.append(f"BMI {bmi} kg/m² in obese range (elevated insulin resistance risk)")
+        elif bmi >= 25.0:
+            metabolic_burden += 8
+            evidence_d4.append(f"BMI {bmi} kg/m² in overweight range")
+        elif bmi < 18.5:
+            metabolic_burden += 6
+            evidence_d4.append(f"BMI {bmi} kg/m² in underweight range (possible hypothalamic suppression)")
+        else:
+            evidence_d4.append(f"BMI {bmi} kg/m² in normal range")
+    else:
+        evidence_d4.append("BMI unassessed / missing")
+
+    norm_act = normalize_activity_level(user_data.get('activity_level'))
+    if norm_act == "Sedentary":
+        metabolic_burden += 4
+        evidence_d4.append("Sedentary physical activity level")
+    elif norm_act == "Active":
+        protective_mitigation += 2
+        evidence_d4.append("Active lifestyle (-2 pts metabolic mitigation)")
+    elif norm_act == "Moderate":
+        evidence_d4.append("Moderate activity level")
+
+    if 'diet' in all_symptom_tags:
+        metabolic_burden += 2
+        evidence_d4.append("Reported dietary / blood sugar regulation impact")
+    if 'energy' in all_symptom_tags:
+        metabolic_burden += 2
+        evidence_d4.append("Reported chronic fatigue / low energy impact")
+
+    mental_symptoms = [s for s in symptom_baseline if s and str(s).strip()]
+    if len(mental_symptoms) >= 2:
+        metabolic_burden += 3
+        evidence_d4.append(f"Reported mental health / PMS symptom load ({len(mental_symptoms)} symptoms)")
+    elif len(mental_symptoms) == 1:
+        metabolic_burden += 1
+        evidence_d4.append(f"Reported mental health symptom ({mental_symptoms[0]})")
+
+    fasting_ins = biomarkers_data.get('fasting_insulin')
+    fasting_glu = biomarkers_data.get('fasting_glucose')
+    homa = biomarkers_data.get('homa_ir')
+    if (fasting_ins and fasting_ins > LAB_RANGES['fasting_insulin']['high']) or \
+       (fasting_glu and fasting_glu > LAB_RANGES['fasting_glucose']['high']) or \
+       (homa and homa > LAB_RANGES['homa_ir']['high']):
+        metabolic_burden += 8
+        evidence_d4.append("Elevated metabolic laboratory markers (insulin resistance signal)")
+
+    metabolic_burden = min(20, metabolic_burden)
+
+    sleep = user_data.get('sleep_hours')
+    if sleep is not None:
+        try:
+            sleep_f = float(sleep)
+            if 7.0 <= sleep_f <= 9.0:
+                protective_mitigation += 2
+                evidence_d4.append(f"Healthy sleep duration ({sleep_f} hrs/night, -2 pts metabolic mitigation)")
+        except (ValueError, TypeError):
+            pass
+
+    protective_mitigation = min(4, protective_mitigation)
+    d4_score = min(20, max(0, metabolic_burden - protective_mitigation))
+
+    # ── TOTAL SYNTHESIS ───────────────────────────────────────────────────────
+    total_risk = d1_score + d2_score + d3_score + d4_score
+    total_risk = max(0, min(100, int(round(total_risk))))
+    health_index = max(0, min(100, 100 - total_risk))
+
+    if total_risk >= 60:
+        risk_category = "High Screening Risk"
+    elif total_risk >= 30:
+        risk_category = "Moderate Screening Risk"
+    else:
+        risk_category = "Low Screening Risk"
+
+    has_labs = any(biomarkers_data.get(k) is not None for k in ['testosterone', 'fasting_insulin', 'fasting_glucose', 'lh', 'amh'])
+    has_us = (biomarkers_data.get('follicle_count') is not None or biomarkers_data.get('ovarian_volume') is not None)
+    if has_labs or has_us:
+        assessment_status = "CLINICAL_DATA_AVAILABLE"
+    elif len(cycles_data) >= 2:
+        assessment_status = "TRACKING_ACTIVE"
+    else:
+        assessment_status = "PRELIMINARY_ONBOARDING_ONLY"
+
+    unassessed = []
+    if len(cycles_data) < 2:
+        unassessed.append("Tracked Cycle Dynamics (Need 2+ cycle logs)")
+    if not any(biomarkers_data.get(k) is not None for k in ['testosterone', 'free_testosterone']):
+        unassessed.append("Biochemical Androgen Lab Panel")
+    if not has_us:
+        unassessed.append("Pelvic Ultrasound Imaging")
+    if not any(biomarkers_data.get(k) is not None for k in ['fasting_insulin', 'fasting_glucose', 'homa_ir']):
+        unassessed.append("Metabolic Fasting Blood Panel")
+
+    data_completeness = {
+        "cycle_logs_count": len(cycles_data),
+        "has_androgen_labs": biomarkers_data.get('testosterone') is not None,
+        "has_ultrasound": has_us,
+        "has_metabolic_labs": any(biomarkers_data.get(k) is not None for k in ['fasting_insulin', 'fasting_glucose']),
+        "unassessed_domains": unassessed
+    }
+
+    return {
+        "screening_risk_score": total_risk,
+        "hormone_health_index": health_index,
+        "risk_category": risk_category,
+        "assessment_status": assessment_status,
+        "data_completeness": data_completeness,
+        "is_diagnostic": False,
+        "reported_pcos_history": reported_pcos_history,
+        "is_medication_regulated": is_medication_regulated,
+        "breakdown": {
+            "menstrual_ovulatory": {
+                "score": d1_score,
+                "max": 35,
+                "evidence": evidence_d1
+            },
+            "hyperandrogenism": {
+                "score": d2_score,
+                "max": 25,
+                "evidence": evidence_d2
+            },
+            "reported_clinical_history": {
+                "score": d3_score,
+                "max": 20,
+                "evidence": evidence_d3
+            },
+            "metabolic_lifestyle": {
+                "score": d4_score,
+                "gross_burden": metabolic_burden,
+                "protective_mitigation": protective_mitigation,
+                "max": 20,
+                "evidence": evidence_d4
+            }
+        },
+        "disclaimer": "This score is an informational screening and risk-support metric based on user-reported and logged data. It is NOT a medical diagnosis of PCOS. Only a licensed healthcare provider can diagnose PCOS."
+    }
+
 @app.get("/user/health-metrics")
 def get_health_metrics(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
@@ -584,13 +981,16 @@ def get_health_metrics(current_user: User = Depends(get_current_user), db: Sessi
         if any(l > 35 or l < 21 for l in lengths):
             ir_score += 2
             ir_signals.append("Irregular cycles")
+    elif str(current_user.cycle_regularity).lower() == 'no':
+        ir_score += 2
+        ir_signals.append("Self-reported irregular cycles")
     # Count insulin symptom logs
     insulin_logs = [c for c in cycles if c.insulin_symptoms and c.insulin_symptoms not in ['[]', '', 'None']]
     if insulin_logs:
         ir_score += len(insulin_logs)
         ir_signals.append(f"{len(insulin_logs)} insulin symptom log(s)")
     # Activity
-    if current_user.activity_level in ['Sedentary', 'Light']:
+    if normalize_activity_level(current_user.activity_level) in ['Sedentary', 'Light']:
         ir_score += 1
         ir_signals.append("Low activity level")
 
@@ -682,7 +1082,7 @@ def get_health_metrics(current_user: User = Depends(get_current_user), db: Sessi
         "Active":       ("Great", "#34D399", "Active lifestyle protects against insulin resistance. "),
         "Very Active":  ("High", "#F59E0B", "Very high intensity may raise cortisol and disrupt your cycle. Include rest days."),
     }
-    act = current_user.activity_level or "Sedentary"
+    act = normalize_activity_level(current_user.activity_level or "Sedentary")
     act_status, act_color, act_tip = activity_map.get(act, ("Unknown", "#9CA3AF", "Log your activity level for insights."))
     metrics.append({
         "id": "activity",
@@ -709,81 +1109,82 @@ def get_health_metrics(current_user: User = Depends(get_current_user), db: Sessi
 
 @app.post("/ai/predict-risk")
 def predict_risk(features: dict, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Predicts PCOS risk by aggregating all data in the Medical Vault and Cycle logs."""
+    """Predicts PCOS screening risk by aggregating user profile data, cycle logs, and medical vault biomarkers."""
     
     # --- 1. Fetch Ground Truth Context ---
     bm = get_user_biomarkers(db, current_user.id)
     cycles = db.query(Cycle).filter(Cycle.user_id == current_user.id).order_by(Cycle.start_date.asc()).all()
 
-    # --- 2. Calculate clinical markers ---
-    # Cycle length
-    current_cycle_length = 28
+    # --- 2. Prepare user profile data ---
+    user_data = {
+        "age": features.get('age', current_user.age or 25),
+        "height": features.get('height', current_user.height or 160.0),
+        "weight": features.get('weight', current_user.weight or 60.0),
+        "bmi": features.get('bmi', current_user.bmi),
+        "cycle_regularity": current_user.cycle_regularity,
+        "health_conditions": current_user.health_conditions,
+        "lifestyle_habits": current_user.lifestyle_habits,
+        "symptom_baseline": current_user.symptom_baseline,
+        "sleep_hours": current_user.sleep_hours,
+        "activity_level": current_user.activity_level,
+        "birth_control": current_user.birth_control,
+        "health_concerns": getattr(current_user, 'health_concerns', '[]')
+    }
+
+    # --- 3. Prepare cycle data ---
+    cycles_data = [{
+        "start_date": c.start_date,
+        "end_date": c.end_date,
+        "acne_scale": c.acne_scale,
+        "hair_loss_scale": c.hair_loss_scale,
+        "insulin_symptoms": c.insulin_symptoms
+    } for c in cycles]
+
+    # --- 4. Run Deterministic Screening Calculation ---
+    screening = calculate_pcos_screening_score(user_data, cycles_data, bm)
+
+    # --- 5. Backward compatibility and Rotterdam pillars ---
+    testo = bm.get("testosterone")
+    f_count = bm.get("follicle_count")
+    v_size = bm.get("ovarian_volume")
+
+    current_cycle_length = None
     if len(cycles) >= 2:
         try:
             cl = [(cycles[i].start_date - cycles[i-1].start_date).days for i in range(1, len(cycles))]
             if cl: current_cycle_length = float(np.mean(cl))
         except: pass
-    
-    # Androgens (Clinical from logs + Biochemical from Vault)
-    acne_vals = [c.acne_scale for c in cycles if c.acne_scale is not None]
-    hirs_vals = [c.hair_loss_scale for c in cycles if c.hair_loss_scale is not None]
-    avg_acne = float(np.mean(acne_vals)) if acne_vals else 0
-    avg_hirs = float(np.mean(hirs_vals)) if hirs_vals else 0
-    testo = float(bm["testosterone"]) if bm["testosterone"] is not None else 0.0
-    
-    # Ultrasound (from Vault)
-    f_count = int(bm["follicle_count"]) if bm["follicle_count"] is not None else 5
-    v_size  = float(bm["ovarian_volume"]) if bm["ovarian_volume"] is not None else 7.0
 
-    # --- 3. Evaluate Rotterdam Pillars ---
-    p1 = True if (current_cycle_length > 35 or current_cycle_length < 21) else False
-    p2 = True if (avg_acne > 5 or avg_hirs > 5 or testo > 55) else False
-    p3 = True if (f_count >= 12 or v_size > 10) else False
-    
+    p1 = True if (current_cycle_length and (current_cycle_length > 35 or current_cycle_length < 21)) or str(current_user.cycle_regularity).lower() == 'no' else False
+    p2 = True if (screening["breakdown"]["hyperandrogenism"]["score"] >= 15) or (testo is not None and testo > LAB_RANGES["testosterone"]["high"]) else False
+    p3 = True if ((f_count is not None and f_count >= 12) or (v_size is not None and v_size > 10.0)) else False
     pillars_positive = sum([1 for p in [p1, p2, p3] if p is True])
 
-    # --- 4. Hybrid Scoring Engine ---
-    age = features.get('age', current_user.age or 25)
-    bmi = features.get('bmi', current_user.bmi or 22.0)
-    
-    health_score = 100
-    risk_binary = 0
-    prob = 0.0
-
-    if rf_model and scaler:
-        try:
-            data_arr = np.array([[age, bmi, current_cycle_length, avg_acne, avg_hirs, f_count]])
-            scaled_data = scaler.transform(data_arr)
-            risk_binary = int(rf_model.predict(scaled_data)[0])
-            prob = float(rf_model.predict_proba(scaled_data)[0][1])
-            health_score = int((1 - prob) * 100)
-        except:
-            health_score = 100 - (pillars_positive * 30)
-    else:
-        health_score = 100 - (pillars_positive * 30)
-
-    # --- 5. CRITICAL OVERRIDE: Clinical Safety Logic ---
-    if pillars_positive >= 2:
-        health_score = min(health_score, 35) 
-        risk_binary = 1
-        prob = max(prob, 0.90)
-    elif pillars_positive == 1:
-        health_score = min(health_score, 62)
-        prob = max(prob, 0.55)
-
-    health_score = max(5, min(100, health_score))
-
     return {
-        "pcos_risk_binary": risk_binary,
-        "pcos_risk_probability": round(float(prob), 3),
-        "hormone_health_score": int(health_score),
+        # Preserved compatibility fields for existing UI
+        "hormone_health_score": screening["hormone_health_index"],
+        "pcos_risk_binary": 1 if screening["screening_risk_score"] >= 60 else 0,
+        "pcos_risk_probability": round(screening["screening_risk_score"] / 100.0, 3),
         "pillars_detected": pillars_positive,
         "master_markers": {
             "testosterone": testo,
             "follicles": f_count,
-            "volume": v_size
+            "volume": v_size,
+            "current_cycle_length": current_cycle_length
         },
-        "model": "AggregatorGroundingV1"
+        "model": "DeterministicScreeningV2",
+        
+        # Enriched fields for deterministic screening engine
+        "screening_risk_score": screening["screening_risk_score"],
+        "hormone_health_index": screening["hormone_health_index"],
+        "risk_category": screening["risk_category"],
+        "assessment_status": screening["assessment_status"],
+        "data_completeness": screening["data_completeness"],
+        "is_diagnostic": False,
+        "reported_pcos_history": screening["reported_pcos_history"],
+        "is_medication_regulated": screening["is_medication_regulated"],
+        "breakdown": screening["breakdown"],
+        "disclaimer": screening["disclaimer"]
     }
 
 
@@ -1042,6 +1443,11 @@ def rotterdam_assessment(current_user: User = Depends(get_current_user), db: Ses
         color = "#F59E0B"
         rec = "One pillar detected. Please upload more lab/ultrasound data."
         icon = "⚠️"
+    elif unk_count >= 2:
+        verdict = "Data Incomplete — Screening Only"
+        color = "#9CA3AF"
+        rec = "Insufficient lab or cycle data to evaluate Rotterdam criteria. Track cycles and upload reports."
+        icon = "ℹ️"
     else:
         verdict = "Low Probability of PCOS"
         color = "#34D399"
@@ -1055,7 +1461,7 @@ def rotterdam_assessment(current_user: User = Depends(get_current_user), db: Ses
         "verdict_icon": icon,
         "recommendation": rec,
         "positive_count": pos_count,
-        "disclaimer": "This is an algorithmic estimate based on Rotterdam Criteria. Always confirm with a gynaecologist."
+        "disclaimer": "This is an algorithmic screening estimate based on Rotterdam Criteria. It is NOT a medical diagnosis. Always confirm with a gynaecologist."
     }
 
 
@@ -1063,23 +1469,7 @@ def rotterdam_assessment(current_user: User = Depends(get_current_user), db: Ses
 # ─── MEDICAL REPORT TEXT PARSER ──────────────────────────────────────────────
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Clinical reference ranges (female, reproductive age)
-LAB_RANGES = {
-    "lh":              {"low": 1.0,   "high": 12.0,  "unit": "mIU/mL",  "name": "LH"},
-    "fsh":             {"low": 3.0,   "high": 10.0,  "unit": "mIU/mL",  "name": "FSH"},
-    "lh_fsh_ratio":    {"low": 0.5,   "high": 2.0,   "unit": "ratio",   "name": "LH:FSH Ratio"},
-    "prolactin":       {"low": 2.8,   "high": 29.2,  "unit": "ng/mL",   "name": "Prolactin"},
-    "testosterone":    {"low": 15.0,  "high": 55.0,  "unit": "ng/dL",   "name": "Testosterone"},
-    "amh":             {"low": 1.0,   "high": 3.5,   "unit": "ng/mL",   "name": "AMH"},
-    "fasting_insulin": {"low": 2.0,   "high": 10.0,  "unit": "μIU/mL",  "name": "Fasting Insulin"},
-    "fasting_glucose": {"low": 70.0,  "high": 99.0,  "unit": "mg/dL",   "name": "Fasting Glucose"},
-    "homa_ir":         {"low": 0.0,   "high": 1.9,   "unit": "index",   "name": "HOMA-IR (Insulin Resistance)"},
-    "vitamin_d3":      {"low": 30.0,  "high": 100.0, "unit": "ng/mL",   "name": "Vitamin D3"},
-    "b12":             {"low": 200.0, "high": 900.0, "unit": "pg/mL",   "name": "Vitamin B12"},
-    "ferritin":        {"low": 12.0,  "high": 150.0, "unit": "ng/mL",   "name": "Ferritin"},
-    "follicle_count":  {"low": 0,     "high": 11,    "unit": "follicles","name": "Antral Follicle Count"},
-    "ovarian_volume":  {"low": 0.0,   "high": 10.0,  "unit": "mL",      "name": "Ovarian Volume"},
-}
+# (LAB_RANGES is defined above with the Deterministic Screening Engine)
 
 def _flag(key: str, value) -> dict:
     """Returns status and color for a lab value."""

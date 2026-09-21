@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Python virtual environment and cache
+venv/
+backend/venv/
+__pycache__/
+backend/__pycache__/
+*.pyc
+
+# Expo and build output
+.expo/
+dist/
+frontend/dist/
+web-build/
+
+# Logs and local files
+*.log
+*.db
+she_pcos.db
