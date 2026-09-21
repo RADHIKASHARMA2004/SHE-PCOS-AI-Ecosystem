@@ -1393,24 +1393,34 @@ def rotterdam_assessment(current_user: User = Depends(get_current_user), db: Ses
     # ── Pillar 2: Hyperandrogenism ────────────────────────────────────────────
     acne_vals = [c.acne_scale for c in cycles if c.acne_scale is not None]
     hair_vals  = [c.hair_loss_scale for c in cycles if c.hair_loss_scale is not None]
-    avg_acne   = float(np.mean(acne_vals)) if acne_vals else 0
-    avg_hair   = float(np.mean(hair_vals)) if hair_vals else 0
-    
-    testo = bm["testosterone"]
-    p2_pos = avg_acne > 5 or avg_hair > 5 or (testo is not None and testo > 55)
+    testo = bm.get("testosterone")
+    has_androgen_data = bool(acne_vals or hair_vals or testo is not None)
 
-    ev2 = []
-    if acne_vals: ev2.append(f"Acne: {round(avg_acne,1)}")
-    if hair_vals: ev2.append(f"Hair loss: {round(avg_hair,1)}")
-    if testo:     ev2.append(f"Testo: {testo} ng/dL")
-    
-    results["pillar_2"] = {
-        "name": "Hyperandrogenism",
-        "positive": p2_pos,
-        "evidence": " | ".join(ev2) if ev2 else "No androgen data",
-        "threshold": "Acne/Hair >5 or Testo >55",
-        "data_source": "Logs + Vault"
-    }
+    if has_androgen_data:
+        avg_acne   = float(np.mean(acne_vals)) if acne_vals else 0
+        avg_hair   = float(np.mean(hair_vals)) if hair_vals else 0
+        p2_pos = avg_acne > 5 or avg_hair > 5 or (testo is not None and testo > 55)
+
+        ev2 = []
+        if acne_vals: ev2.append(f"Acne: {round(avg_acne,1)}")
+        if hair_vals: ev2.append(f"Hair loss: {round(avg_hair,1)}")
+        if testo is not None: ev2.append(f"Testo: {testo} ng/dL")
+
+        results["pillar_2"] = {
+            "name": "Hyperandrogenism",
+            "positive": p2_pos,
+            "evidence": " | ".join(ev2) if ev2 else "No androgen data",
+            "threshold": "Acne/Hair >5 or Testo >55",
+            "data_source": "Logs + Vault"
+        }
+    else:
+        results["pillar_2"] = {
+            "name": "Hyperandrogenism",
+            "positive": None,
+            "evidence": "Unassessed: no symptom logs or biochemical androgen evidence recorded",
+            "threshold": "Acne/Hair >5 or Testo >55",
+            "data_source": "Logs + Vault"
+        }
 
     # ── Pillar 3: Polycystic Ovaries ─────────────────────────────────────────
     follicle = bm["follicle_count"]
@@ -1443,10 +1453,10 @@ def rotterdam_assessment(current_user: User = Depends(get_current_user), db: Ses
         color = "#F59E0B"
         rec = "One pillar detected. Please upload more lab/ultrasound data."
         icon = "⚠️"
-    elif unk_count >= 2:
-        verdict = "Data Incomplete — Screening Only"
+    elif unk_count >= 1:
+        verdict = "Incomplete Clinical Data"
         color = "#9CA3AF"
-        rec = "Insufficient lab or cycle data to evaluate Rotterdam criteria. Track cycles and upload reports."
+        rec = "Available recorded data are insufficient to assess all three Rotterdam criteria. Clinical evaluation is required."
         icon = "ℹ️"
     else:
         verdict = "Low Probability of PCOS"
@@ -1461,6 +1471,7 @@ def rotterdam_assessment(current_user: User = Depends(get_current_user), db: Ses
         "verdict_icon": icon,
         "recommendation": rec,
         "positive_count": pos_count,
+        "unknown_count": unk_count,
         "disclaimer": "This is an algorithmic screening estimate based on Rotterdam Criteria. It is NOT a medical diagnosis. Always confirm with a gynaecologist."
     }
 

@@ -24,6 +24,7 @@ export default function Dashboard({ navigation }: any) {
   const { logout } = useAuth();
   const [healthScore, setHealthScore]       = useState(0);
   const [riskLevel, setRiskLevel]           = useState('Loading...');
+  const [riskData, setRiskData]             = useState<any>(null);
   const [loading, setLoading]               = useState(true);
   const [pregnancyMode, setPregnancyMode]   = useState(false);
   const [birthControl, setBirthControl]     = useState('None');
@@ -172,11 +173,21 @@ export default function Dashboard({ navigation }: any) {
   const fetchRiskScore = async () => {
     try {
       const res = await apiClient.post('/ai/predict-risk', {});
+      setRiskData(res.data);
       if (res.data.error) {
         setRiskLevel('Model Untrained');
       } else {
-        setHealthScore(res.data.hormone_health_score);
-        setRiskLevel(res.data.pcos_risk_binary === 1 ? 'HIGH RISK' : 'LOW RISK');
+        setHealthScore(
+          res.data.hormone_health_index ??
+          res.data.hormone_health_score ??
+          0
+        );
+        setRiskLevel(
+          res.data.risk_category ??
+            (res.data.pcos_risk_binary === 1
+              ? 'High Screening Risk'
+              : 'Low Screening Risk')
+        );
       }
     } catch (e) {
       setRiskLevel('API Error');
@@ -185,8 +196,23 @@ export default function Dashboard({ navigation }: any) {
     }
   };
 
-  const riskColor = riskLevel === 'LOW RISK' ? SHE.mint :
-    riskLevel === 'HIGH RISK' ? SHE.rose : SHE.lavender;
+  const riskColor =
+    riskLevel === 'Low Screening Risk'
+      ? SHE.mint
+      : riskLevel === 'Moderate Screening Risk'
+      ? SHE.peach
+      : riskLevel === 'High Screening Risk'
+      ? SHE.rose
+      : SHE.lavender;
+
+  const assessmentLabel =
+    riskData?.assessment_status === 'PRELIMINARY_ONBOARDING_ONLY'
+      ? '⚡ Preliminary Profile'
+      : riskData?.assessment_status === 'TRACKING_ACTIVE'
+      ? '📅 Tracking Active'
+      : riskData?.assessment_status === 'CLINICAL_DATA_AVAILABLE'
+      ? '🩺 Clinical Data Integrated'
+      : null;
 
   const QUICK_ACTIONS = [
     { emoji: '🩸', label: 'Log Period',  screen: 'Cycle',                      bg: SHE.roseLight,     text: SHE.roseDark  },
@@ -227,7 +253,7 @@ export default function Dashboard({ navigation }: any) {
           {/* Label row with ⓘ button */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
             <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 14, fontWeight: '600' }}>
-              🧬 Hormone Health Score
+              🧬 Hormone Health Index
             </Text>
             <TouchableOpacity
               onPress={() => setShowHormoneInfo(true)}
@@ -242,12 +268,25 @@ export default function Dashboard({ navigation }: any) {
               <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 22, marginBottom: 8, marginLeft: 4 }}>/100</Text>
             </View>
           )}
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-            <View style={{ backgroundColor: 'rgba(255,255,255,0.25)', paddingHorizontal: 12,
-              paddingVertical: 4, borderRadius: 99, marginRight: 8 }}>
+          <View style={{ marginTop: 8 }}>
+            <View style={{ alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.25)', paddingHorizontal: 12,
+              paddingVertical: 4, borderRadius: 99 }}>
               <Text style={{ color: 'white', fontWeight: '800', fontSize: 12 }}>{riskLevel}</Text>
             </View>
-            <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>Based on AI predictions</Text>
+            {riskData?.screening_risk_score !== undefined && riskData?.screening_risk_score !== null && (
+              <Text style={{ color: 'rgba(255,255,255,0.95)', fontSize: 12, fontWeight: '700', marginTop: 8 }}>
+                Screening Risk Burden: {riskData.screening_risk_score}/100
+              </Text>
+            )}
+            {assessmentLabel && (
+              <View style={{ alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.2)',
+                paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, marginTop: 8 }}>
+                <Text style={{ color: 'white', fontWeight: '700', fontSize: 11 }}>{assessmentLabel}</Text>
+              </View>
+            )}
+            <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 8 }}>
+              Screening estimate · Non-diagnostic
+            </Text>
           </View>
         </View>
 
@@ -256,22 +295,29 @@ export default function Dashboard({ navigation }: any) {
           <View style={{ marginHorizontal: 20, marginBottom: 12, backgroundColor: 'white',
             borderRadius: 24, padding: 18, shadowColor: '#FF6B9D', shadowOpacity: 0.07, shadowRadius: 14, elevation: 3 }}>
             {/* Header */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 14 }}>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontWeight: '900', color: SHE.textDark, fontSize: 15 }}>
-                  🧙‍♀️ Rotterdam PCOS Criteria
+                  🩺 Rotterdam Diagnostic Framework
                 </Text>
-                <Text style={{ color: SHE.textMid, fontSize: 11, marginTop: 2 }}>2 of 3 positive = High PCOS probability</Text>
+                <Text style={{ color: SHE.textMid, fontSize: 11, marginTop: 2 }}>
+                  Educational reference · Formal diagnosis requires clinical evaluation
+                </Text>
+                <View style={{ alignSelf: 'flex-start', backgroundColor: '#F3F4F6', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99, marginTop: 6 }}>
+                  <Text style={{ color: SHE.textDark, fontWeight: '700', fontSize: 11 }}>
+                    {rotterdam.positive_count ?? 0} positive · {rotterdam.unknown_count ?? 0} unassessed
+                  </Text>
+                </View>
               </View>
               <View style={{ backgroundColor: rotterdam.verdict_color + '22', paddingHorizontal: 10,
-                paddingVertical: 5, borderRadius: 99 }}>
+                paddingVertical: 5, borderRadius: 99, marginLeft: 8 }}>
                 <Text style={{ color: rotterdam.verdict_color, fontWeight: '900', fontSize: 18 }}>{rotterdam.verdict_icon}</Text>
               </View>
             </View>
 
             {/* 3 Pillars */}
             {['pillar_1', 'pillar_2', 'pillar_3'].map((pk, pi) => {
-              const p = rotterdam.pillars?.[pk];
+              const p = rotterdam.summary?.[pk] ?? rotterdam.pillars?.[pk];
               if (!p) return null;
               const color = p.positive === true ? '#FF6B9D' : p.positive === false ? '#34D399' : '#9CA3AF';
               const icon  = p.positive === true ? '🚨' : p.positive === false ? '✅' : '❓';
@@ -562,7 +608,7 @@ export default function Dashboard({ navigation }: any) {
                   <Text style={{ fontSize: 28 }}>🧬</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontWeight: '900', color: SHE.textDark, fontSize: 18 }}>Hormone Health Score</Text>
+                  <Text style={{ fontWeight: '900', color: SHE.textDark, fontSize: 18 }}>Hormone Health Index</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 8 }}>
                     <View style={{ backgroundColor: (
                         healthScore >= 75 ? '#ECFDF5' : healthScore >= 50 ? '#FFFBEB' : '#FFF1F2'
@@ -583,76 +629,154 @@ export default function Dashboard({ navigation }: any) {
               </View>
 
               <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
-                {/* What is the score */}
+                {/* 1. How your score works */}
                 <View style={{ marginBottom: 16 }}>
                   <Text style={{ fontWeight: '800', color: SHE.textDark, fontSize: 14, marginBottom: 8 }}>
-                    {'🔍 What is the Hormone Health Score?'}
+                    🔍 How your score works
                   </Text>
-                  <Text style={{ color: SHE.textMid, fontSize: 13, lineHeight: 20 }}>
-                    {'Your Hormone Health Score (0–100) is SHE\'s AI-powered estimate of how balanced your hormonal environment is right now. A higher score means lower PCOS risk and more stable hormones. It is updated each time you open the app using your latest profile and cycle data.'}
+                  <Text style={{ color: SHE.textMid, fontSize: 13, lineHeight: 20, marginBottom: 8 }}>
+                    Your Hormone Health Index is an informational screening metric based on four evidence domains. It is not a medical diagnosis.
                   </Text>
-                </View>
-
-                {/* How it is calculated */}
-                <View style={{ backgroundColor: '#FFE4EF', borderRadius: 16, padding: 14, marginBottom: 16 }}>
-                  <Text style={{ fontWeight: '800', color: SHE.rose, fontSize: 14, marginBottom: 10 }}>
-                    {'🧮 How SHE calculates your score'}
-                  </Text>
-
-                  {/* Step 1 */}
-                  <View style={{ marginBottom: 10, paddingLeft: 8, borderLeftWidth: 3, borderLeftColor: SHE.rose }}>
-                    <Text style={{ fontWeight: '800', color: SHE.textDark, fontSize: 13 }}>Step 1 — Feature extraction</Text>
-                    <Text style={{ color: SHE.textMid, fontSize: 12, lineHeight: 18, marginTop: 2 }}>
-                      SHE collects 6 clinical features from your profile:{'\n'}
-                      {'• Age · BMI · Avg cycle length\n• Acne score · Hair loss score · Follicle estimate'}
+                  <View style={{ backgroundColor: '#F9FAFB', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#F3F4F6' }}>
+                    <Text style={{ color: SHE.textDark, fontSize: 12, lineHeight: 18 }}>
+                      • <Text style={{ fontWeight: '700' }}>Screening Risk Score</Text> = total screening burden out of 100
+                      {riskData?.screening_risk_score !== undefined && riskData?.screening_risk_score !== null && (
+                        <Text style={{ fontWeight: '800', color: SHE.roseDark }}> ({riskData.screening_risk_score}/100)</Text>
+                      )}
                     </Text>
-                  </View>
-
-                  {/* Step 2 */}
-                  <View style={{ marginBottom: 10, paddingLeft: 8, borderLeftWidth: 3, borderLeftColor: '#F59E0B' }}>
-                    <Text style={{ fontWeight: '800', color: SHE.textDark, fontSize: 13 }}>Step 2 — AI prediction</Text>
-                    <Text style={{ color: SHE.textMid, fontSize: 12, lineHeight: 18, marginTop: 2 }}>
-                      {'A RandomForest model (trained on 1,000 synthetic PCOS patients using the Rotterdam Criteria) predicts your PCOS probability. The health score = (1 − PCOS probability) × 100.'}
-                    </Text>
-                  </View>
-
-                  {/* Step 3 */}
-                  <View style={{ paddingLeft: 8, borderLeftWidth: 3, borderLeftColor: '#34D399' }}>
-                    <Text style={{ fontWeight: '800', color: SHE.textDark, fontSize: 13 }}>Step 3 — Rule-based refinement</Text>
-                    <Text style={{ color: SHE.textMid, fontSize: 12, lineHeight: 18, marginTop: 2 }}>
-                      {'If the AI model needs more data, SHE uses an evidence-based rule engine that deducts points for: high BMI, irregular cycles, elevated acne, hair loss, high follicle count, and sedentary lifestyle.'}
+                    <Text style={{ color: SHE.textDark, fontSize: 12, lineHeight: 18, marginTop: 4 }}>
+                      • <Text style={{ fontWeight: '700' }}>Hormone Health Index</Text> = 100 − Screening Risk Score
+                      {healthScore !== undefined && (
+                        <Text style={{ fontWeight: '800', color: SHE.mint }}> ({healthScore}/100)</Text>
+                      )}
                     </Text>
                   </View>
                 </View>
 
-                {/* What your score means */}
-                <View style={{ backgroundColor: (
-                    healthScore >= 75 ? '#ECFDF5' : healthScore >= 50 ? '#FFFBEB' : '#FFF1F2'
-                  ), borderRadius: 16, padding: 14, marginBottom: 16 }}>
+                {/* 2. Four evidence domains */}
+                <View style={{ marginBottom: 16 }}>
                   <Text style={{ fontWeight: '800', color: SHE.textDark, fontSize: 14, marginBottom: 8 }}>
-                    {'💕 What your score of '}{healthScore}{' means'}
+                    🧮 Four evidence domains
                   </Text>
-                  <Text style={{ color: SHE.textDark, fontSize: 14, lineHeight: 22 }}>
-                    {healthScore >= 75
-                      ? '🟢 Excellent! Your hormonal environment looks balanced. Keep up your healthy habits and keep logging your cycles to maintain accurate predictions.'
-                      : healthScore >= 55
-                      ? '🟡 Moderate balance. Some PCOS risk factors are present. Focus on sleep, low-GI diet, regular movement, and consistent cycle logging.'
-                      : '🔴 Multiple hormonal risk markers detected. We recommend seeing an endocrinologist for a full PCOS evaluation (LH, FSH, testosterone, insulin panel).'}
-                  </Text>
+                  {[
+                    {
+                      key: 'menstrual_ovulatory',
+                      label: 'Menstrual & Ovulatory',
+                      data: riskData?.breakdown?.menstrual_ovulatory,
+                      icon: '🩸',
+                    },
+                    {
+                      key: 'hyperandrogenism',
+                      label: 'Hyperandrogenism',
+                      data: riskData?.breakdown?.hyperandrogenism,
+                      icon: '⚡',
+                    },
+                    {
+                      key: 'reported_clinical_history',
+                      label: 'Reported Clinical History',
+                      data: riskData?.breakdown?.reported_clinical_history,
+                      icon: '📋',
+                    },
+                    {
+                      key: 'metabolic_lifestyle',
+                      label: 'Metabolic & Lifestyle',
+                      data: riskData?.breakdown?.metabolic_lifestyle,
+                      icon: '🥗',
+                    },
+                  ].map((dom) => (
+                    <View
+                      key={dom.key}
+                      style={{
+                        backgroundColor: '#FFF0F5',
+                        borderRadius: 14,
+                        padding: 12,
+                        marginBottom: 8,
+                        borderLeftWidth: 3,
+                        borderLeftColor: SHE.rose,
+                      }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontWeight: '800', color: SHE.textDark, fontSize: 13 }}>
+                          {dom.icon} {dom.label}
+                        </Text>
+                        <Text style={{ fontWeight: '900', color: SHE.roseDark, fontSize: 13 }}>
+                          {dom.data?.score ?? 0} / {dom.data?.max ?? '--'}
+                        </Text>
+                      </View>
+                      {dom.data?.evidence && dom.data.evidence.length > 0 ? (
+                        <View style={{ marginTop: 6 }}>
+                          {dom.data.evidence.map((ev: string, idx: number) => (
+                            <Text key={idx} style={{ color: SHE.textMid, fontSize: 11, lineHeight: 16 }}>
+                              • {ev}
+                            </Text>
+                          ))}
+                        </View>
+                      ) : (
+                        <Text style={{ color: SHE.textMid, fontSize: 11, fontStyle: 'italic', marginTop: 4 }}>
+                          No additional evidence recorded
+                        </Text>
+                      )}
+                    </View>
+                  ))}
                 </View>
 
-                {/* Data used */}
-                <View style={{ marginBottom: 24 }}>
-                  <Text style={{ fontWeight: '800', color: SHE.textDark, fontSize: 13, marginBottom: 8 }}>
-                    {'📊 Data used in this calculation'}
+                {/* 3. Assessment status */}
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{ fontWeight: '800', color: SHE.textDark, fontSize: 14, marginBottom: 8 }}>
+                    ⏱️ Assessment status
                   </Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                    {['Your age', 'BMI (height + weight)', 'Avg cycle length', 'Acne logs', 'Hair loss logs', 'Activity level'].map((d, i) => (
-                      <View key={i} style={{ backgroundColor: '#F3F4F6', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 99 }}>
-                        <Text style={{ fontSize: 12, color: SHE.textMid, fontWeight: '600' }}>{'📎 '}{d}</Text>
-                      </View>
-                    ))}
+                  <View style={{ alignSelf: 'flex-start', backgroundColor: '#F3F4F6', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 99 }}>
+                    <Text style={{ color: SHE.textDark, fontWeight: '700', fontSize: 12 }}>
+                      {assessmentLabel ?? (riskData?.assessment_status || '⚡ Preliminary Profile')}
+                    </Text>
                   </View>
+                </View>
+
+                {/* 4. Data completeness */}
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{ fontWeight: '800', color: SHE.textDark, fontSize: 14, marginBottom: 8 }}>
+                    📊 Data completeness
+                  </Text>
+                  <View style={{ backgroundColor: '#F9FAFB', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#F3F4F6' }}>
+                    <Text style={{ color: SHE.textDark, fontSize: 12, lineHeight: 18 }}>
+                      • Cycle logs: <Text style={{ fontWeight: '700' }}>{riskData?.data_completeness?.cycle_logs_count ?? 0} recorded</Text>
+                    </Text>
+                    <Text style={{ color: SHE.textDark, fontSize: 12, lineHeight: 18, marginTop: 4 }}>
+                      • Androgen laboratory panel: <Text style={{ fontWeight: '700' }}>{riskData?.data_completeness?.has_androgen_labs ? '✅ Available' : '❌ Not uploaded'}</Text>
+                    </Text>
+                    <Text style={{ color: SHE.textDark, fontSize: 12, lineHeight: 18, marginTop: 4 }}>
+                      • Pelvic ultrasound imaging: <Text style={{ fontWeight: '700' }}>{riskData?.data_completeness?.has_ultrasound ? '✅ Available' : '❌ Not uploaded'}</Text>
+                    </Text>
+                    <Text style={{ color: SHE.textDark, fontSize: 12, lineHeight: 18, marginTop: 4 }}>
+                      • Metabolic blood panel: <Text style={{ fontWeight: '700' }}>{riskData?.data_completeness?.has_metabolic_labs ? '✅ Available' : '❌ Not uploaded'}</Text>
+                    </Text>
+                  </View>
+
+                  {riskData?.data_completeness?.unassessed_domains && riskData.data_completeness.unassessed_domains.length > 0 && (
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={{ fontWeight: '800', color: SHE.textDark, fontSize: 13, marginBottom: 6 }}>
+                        Data that can improve assessment
+                      </Text>
+                      {riskData.data_completeness.unassessed_domains.map((item: string, idx: number) => (
+                        <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                          <Text style={{ fontSize: 12, marginRight: 6 }}>📋</Text>
+                          <Text style={{ color: SHE.textMid, fontSize: 12, flex: 1, lineHeight: 16 }}>{item}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+
+                {/* 5. Important */}
+                <View style={{ backgroundColor: '#FFF1F2', borderRadius: 14, padding: 14, borderLeftWidth: 4, borderLeftColor: SHE.rose, marginBottom: 20 }}>
+                  <Text style={{ fontWeight: '800', color: SHE.roseDark, fontSize: 13, marginBottom: 4 }}>
+                    ⚠️ Important
+                  </Text>
+                  <Text style={{ color: '#9F1239', fontSize: 12, lineHeight: 18 }}>
+                    {riskData?.disclaimer || 'Screening estimate only. This is not a medical diagnosis.'}
+                  </Text>
+                  <Text style={{ color: '#9F1239', fontSize: 11, lineHeight: 16, marginTop: 6, fontWeight: '600' }}>
+                    This score is an informational screening and risk-support metric only.
+                  </Text>
                 </View>
               </ScrollView>
             </View>
