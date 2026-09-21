@@ -6,10 +6,11 @@ import { Platform } from 'react-native';
 // If testing on a physical device, this MUST be the IP address of your computer on the local Wi-Fi (e.g., 192.168.1.x)
 // Dynamic base URL: uses current hostname on web, or local Wi-Fi IP for mobile/emulators
 const getBaseUrl = () => {
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
-    return `http://${window.location.hostname}:8000`;
+  if (Platform.OS === "web") {
+    return "https://she-pcos-api.onrender.com";
   }
-  return 'http://192.168.1.6:8000';
+
+  return "http://192.168.1.6:8000";
 };
 
 const BASE_URL = getBaseUrl();
