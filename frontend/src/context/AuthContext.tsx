@@ -42,14 +42,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const login = async (username: string, pass: string) => {
     try {
-      const formData = new FormData();
-      formData.append('username', username);
-      formData.append('password', pass);
-  
-      const res = await apiClient.post('/auth/login', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' } // FastAPI OAuth2 requires form data
-      });
+     const params = new URLSearchParams();
+      params.append('username', username);
+      params.append('password', pass);
 
+     const res = await apiClient.post('/auth/login', params, {
+     headers: {
+       'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
       if (res.data.access_token) {
         setAuthToken(res.data.access_token);
         setUserToken(res.data.access_token);
